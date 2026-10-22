@@ -1,0 +1,84 @@
+name: Android APK
+on:
+  push:
+    branches: [fix/codex-image-model]
+    paths:
+      - '.github/workflows/android-apk.yml'
+      - 'src/android/**'
+      - 'deps/**'
+      - 'scripts/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize Android submodule
+        run: git submodule update --init --recursive deps/proot
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deps/rclone-mobile/go.mod
+          cache-dependency-path: deps/rclone-mobile/go.sum
+      - uses: android-actions/setup-android@v3
+      - name: Install Android toolchains
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "cmake;3.22.1" "ndk;28.0.13004108"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108" >> "$GITHUB_ENV"
+      - name: Build PRoot and prepare Alpine
+        run: |
+          bash deps/build_proot.sh
+          bash scripts/prepare_android_sandbox.sh
+      - name: Build rclone
+        run: |
+          MOBILE_VERSION=$(cd deps/rclone-mobile && go list -m -f '{{.Version}}' golang.org/x/mobile)
+          go install golang.org/x/mobile/cmd/gomobile@"$MOBILE_VERSION"
+          go install golang.org/x/mobile/cmd/gobind@"$MOBILE_VERSION"
+          gomobile init
+          bash deps/build_rclone_android.sh
+          mkdir -p src/android/app/libs
+          cp deps/build/rclone/rclone.aar src/android/app/libs/
+          cp src/android/app/provider-customization.properties.example src/android/app/provider-customization.properties
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build APK
+        working-directory: src/android
+        run: ./gradlew --no-daemon --max-workers=2 :app:assembleDebug
+      - name: Test image request construction
+        working-directory: src/android
+        run: ./gradlew --no-daemon --max-workers=2 :app:testDebugUnitTest --tests com.openminis.app.provider.CodexImageModelTest
+      - name: Check APK contents and checksum
+        run: |
+          APK=src/android/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -l "$APK" | tee apk-contents.txt
+          for entry in assets/alpine-minirootfs.tar.gz lib/arm64-v8a/libproot.so lib/arm64-v8a/libproot-loader.so lib/arm64-v8a/libproot-loader32.so; do
+            unzip -Z1 "$APK" | grep -Fx "$entry"
+          done
+          sha256sum "$APK" > APK-SHA256.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: OpenMinis-android-arm64-debug
+          path: |
+            src/android/app/build/outputs/apk/debug/*.apk
+            APK-SHA256.txt
+            apk-contents.txt
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-reports
+          path: |
+            src/android/app/build/reports/tests/
+            src/android/app/build/test-results/
+          if-no-files-found: ignore
