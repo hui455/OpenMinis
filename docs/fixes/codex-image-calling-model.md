@@ -37,9 +37,14 @@ cd src/android
 ./gradlew :app:testDebugUnitTest --tests com.openminis.app.provider.CodexImageModelTest
 ```
 
-It could not start because `services.gradle.org` failed DNS resolution while
-downloading Gradle 8.11.1. Tests and compilation have NOT been verified, and
-no APK has been built. No live ChatGPT OAuth image request was performed.
+The local attempt could not start because `services.gradle.org` failed DNS
+resolution while downloading Gradle 8.11.1. Cloud verification subsequently
+passed on 2026-10-22 in GitHub Actions run 39823826859 (commit
+`aece5d6ce939295555c83b1317fe7435aa7c0a6c`): `:app:assembleDebug`, all 8
+`CodexImageModelTest` tests (0 failures/errors/skips), required Alpine/PRoot
+asset checks, and APK artifact upload. The ARM64 debug APK SHA-256 is
+`746981bfdd37c13320a0d056579f80d278b373bd572fb738e3ba77fabd4dfb96`.
+No device installation or live ChatGPT OAuth image request was performed.
 A model appearing in discovery or passing a text test alone does not establish
 image-tool compatibility. This is a configuration/diagnostic repair, not proof
 that the reported account can now generate images. A compatible calling model
