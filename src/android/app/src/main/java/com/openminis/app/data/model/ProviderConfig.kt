@@ -423,6 +423,8 @@ data class ModelOverrides(
     val customHeaders: Map<String, String>? = null,
     /** Raw JSON merged into the request body for provider-specific knobs. */
     val extraBodyParams: JsonObject? = null,
+    /** Text model that invokes the Codex image tool; null keeps the legacy default. */
+    val codexImageResponseModel: String? = null,
 ) {
     val isEmpty: Boolean
         get() = displayName == null
@@ -441,6 +443,7 @@ data class ModelOverrides(
             && topP == null
             && customHeaders == null
             && extraBodyParams == null
+            && codexImageResponseModel == null
 }
 
 @Serializable

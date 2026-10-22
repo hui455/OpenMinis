@@ -63,6 +63,12 @@ fun ModelEntryDetailScreen(
     val baseModel = entry.baseModel
     val overrides = entry.overrides
 
+    val isCodexImage = instance?.providerType == com.openminis.app.data.model.ProviderType.openAI &&
+        instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth &&
+        baseModel.id in setOf("gpt-image-2", "gpt-image-2.5-sunburst", "gpt-image-2.5-flare")
+    var codexImageResponseModel by remember(entryId) {
+        mutableStateOf(overrides.codexImageResponseModel.orEmpty())
+    }
     var modelId by remember { mutableStateOf(baseModel.id) }
     var displayName by remember { mutableStateOf(overrides.displayName ?: baseModel.displayName) }
     var displayNameTouched by remember { mutableStateOf(false) }
@@ -168,10 +174,13 @@ fun ModelEntryDetailScreen(
                         outputModalities = newOutputs,
                         outputModalitiesTouched = outputModalitiesTouched,
                     )
+                    val savedOverrides = if (isCodexImage) newOverrides.copy(
+                        codexImageResponseModel = codexImageResponseModel.trim().takeIf { it.isNotEmpty() },
+                    ) else newOverrides
                     val updated = if (entry.isCustom) {
-                        entry.copy(baseModel = baseModel.copy(id = modelId), overrides = newOverrides, isHidden = isHidden)
+                        entry.copy(baseModel = baseModel.copy(id = modelId), overrides = savedOverrides, isHidden = isHidden)
                     } else {
-                        entry.copy(overrides = newOverrides, isHidden = isHidden)
+                        entry.copy(overrides = savedOverrides, isHidden = isHidden)
                     }
                     providerRepository.updateEntry(updated)
                     onBack()
@@ -208,6 +217,23 @@ fun ModelEntryDetailScreen(
                 value = instance?.label ?: instanceId,
                 showDivider = false,
             )
+        }
+
+        if (isCodexImage) {
+            SettingsSection(
+                header = stringResource(R.string.codex_image_calling_model),
+                footer = stringResource(R.string.codex_image_calling_model_help),
+            ) {
+                SettingsCardBlock {
+                    RowLabel(text = stringResource(R.string.codex_image_calling_model))
+                    SectionTextField(
+                        value = codexImageResponseModel,
+                        onValueChange = { codexImageResponseModel = it },
+                        placeholder = "gpt-5.5",
+                        singleLine = true,
+                    )
+                }
+            }
         }
 
         // ── Capabilities ────────────────────────────────────────────────
@@ -434,4 +460,5 @@ internal fun buildModelOverrides(
     topP = existing.topP,
     customHeaders = existing.customHeaders,
     extraBodyParams = existing.extraBodyParams,
+    codexImageResponseModel = existing.codexImageResponseModel,
 )

@@ -3161,6 +3161,7 @@ class ProviderRepository(private val context: Context) {
                         entry.overrides.maxThinkingLevel?.let {
                             o.put("maxThinkingLevel", it.name.lowercase())
                         }
+                        entry.overrides.codexImageResponseModel?.let { o.put("codexImageResponseModel", it) }
                         entry.overrides.temperature?.let { o.put("temperature", it) }
                         entry.overrides.topP?.let { o.put("topP", it) }
                         entry.overrides.customHeaders?.let { headers ->
@@ -3768,6 +3769,8 @@ class ProviderRepository(private val context: Context) {
                                 for (k in h.keys()) put(k, h.optString(k, ""))
                             }.takeIf { it.isNotEmpty() }
                         },
+                        codexImageResponseModel = overridesObj.optString("codexImageResponseModel", "")
+                            .trim().takeIf { it.isNotEmpty() },
                         extraBodyParams = overridesObj.optJSONObject("extraBodyParams")?.let { ex ->
                             runCatching {
                                 kotlinx.serialization.json.Json

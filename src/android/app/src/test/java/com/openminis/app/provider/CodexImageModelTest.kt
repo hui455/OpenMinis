@@ -35,16 +35,54 @@ class CodexImageModelTest {
         outputModalities = listOf("image"),
     )
 
-    private fun bodyFor(modelId: String): JSONObject {
+    private fun bodyFor(modelId: String, responseModel: String? = null): JSONObject {
         val provider = OpenAIProvider(
             oauthTokenProvider = { "test-token" },
             model = imageModel(modelId),
         )
+        provider.modelOverrides = com.openminis.app.data.model.ModelOverrides(codexImageResponseModel = responseModel)
         val m = OpenAIProvider::class.java
             .getDeclaredMethod("buildCodexImageBody", List::class.java)
             .apply { isAccessible = true }
         val messages = listOf(LLMMessage(role = LLMMessage.Role.USER, content = "a red bicycle"))
         return m.invoke(provider, messages) as JSONObject
+    }
+
+    @Test
+    fun `calling model override preserves the selected image tool and prompt`() {
+        val body = bodyFor("gpt-image-2.5-sunburst", "  account-text-model  ")
+        assertEquals("account-text-model", body.getString("model"))
+        assertEquals("gpt-image-2.5-sunburst", imageTool(body).getString("model"))
+        assertTrue(body.getJSONArray("input").getJSONObject(0).getString("content").contains("a red bicycle"))
+        assertTrue(body.getBoolean("stream"))
+        assertFalse(body.getBoolean("store"))
+    }
+
+    @Test
+    fun `blank calling model retains the legacy default`() {
+        assertEquals("gpt-5.5", bodyFor("gpt-image-2", "  ").getString("model"))
+    }
+
+    @Test
+    fun `image and malformed calling model ids fail before a request is sent`() {
+        for (id in listOf("gpt-image-2.5-sunburst", "bad model", "bad\nmodel")) {
+            try {
+                bodyFor("gpt-image-2", id)
+                org.junit.Assert.fail("Expected rejection for $id")
+            } catch (e: java.lang.reflect.InvocationTargetException) {
+                assertTrue(e.cause is IllegalArgumentException)
+            }
+        }
+    }
+
+    @Test
+    fun `calling model setting survives serialization and is not empty`() {
+        val settings = com.openminis.app.data.model.ModelOverrides(codexImageResponseModel = "account-text-model")
+        assertFalse(settings.isEmpty)
+        val serializer = com.openminis.app.data.model.ModelOverrides.serializer()
+        val encoded = kotlinx.serialization.json.Json.encodeToString(serializer, settings)
+        assertEquals(settings, kotlinx.serialization.json.Json.decodeFromString(serializer, encoded))
+        assertEquals(null, kotlinx.serialization.json.Json.decodeFromString(serializer, "{}").codexImageResponseModel)
     }
 
     private fun imageTool(body: JSONObject): JSONObject =

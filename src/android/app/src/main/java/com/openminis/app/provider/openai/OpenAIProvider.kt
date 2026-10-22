@@ -889,7 +889,7 @@ class OpenAIProvider private constructor(
                 } ?: false)
             com.openminis.app.logging.AppLogger.info(
                 "OpenAIProvider",
-                "[T321] → REQ url=${request.url} model=${model.id} stream=${body.optBoolean("stream", false)} " +
+                "[T321] → REQ url=${request.url} model=${body.optString("model")} selectedModel=${model.id} stream=${body.optBoolean("stream", false)} " +
                     "headerKeys=${request.headers.names()} authPresent=$authPresent " +
                     "messages=$msgsLen tools=$toolsLen temp=$temp maxTokens=$maxTok hasSystem=$hasSystem " +
                     "useResponsesAPI=${!usesChatCompletionsAPI} bodyLen=${bodyStr.length}"
@@ -3022,12 +3022,21 @@ class OpenAIProvider private constructor(
 
     /**
      * [T-codex-gpt-image2-oauth-android] Build the Codex image_generation
-     * request body. The wire model is gpt-5.5 (the Codex backend invokes the
+     * request body. The wire model is configurable, defaulting to gpt-5.5 (the Codex backend invokes the
      * underlying gpt-image-2 via the built-in image_generation tool); the user
      * turn is the fixed "Use the image generation tool to create: <prompt>"
      * instruction. The <prompt> is the latest user text — plain string content
      * or the concatenated text parts of the last user message.
      */
+    private fun codexImageResponseModel(): String {
+        val selected = modelOverrides?.codexImageResponseModel?.trim()
+            ?.takeIf { it.isNotEmpty() } ?: "gpt-5.5"
+        require(!selected.startsWith("gpt-image-") && selected.none { it.isWhitespace() || it.isISOControl() }) {
+            "Image generation requires a Codex text model as its calling model, not an image model."
+        }
+        return selected
+    }
+
     private fun buildCodexImageBody(messages: List<LLMMessage>): JSONObject {
         val lastUser = messages.lastOrNull { it.role == LLMMessage.Role.USER }
         val prompt = lastUser?.let { m ->
@@ -3036,7 +3045,7 @@ class OpenAIProvider private constructor(
                     .joinToString(" ") { it.text }.trim()
         }.orEmpty()
         return JSONObject().apply {
-            put("model", "gpt-5.5")
+            put("model", codexImageResponseModel())
             put("instructions", "You are a helpful assistant. Use tools when available.")
             put("input", JSONArray().put(JSONObject().apply {
                 put("role", "user")
